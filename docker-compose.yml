@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  state-ledger:
+    build: ./services/state-ledger
+  oracle-ai:
+    build: ./services/oracle-ai
+    ports: ["5001:5001"]
+    environment:
+      - STATE_LEDGER_URL=http://state-ledger:5002
+    depends_on: [state-ledger]
+  portal:
+    build: ./portal-webapp
+    ports: ["3000:3000"]
+    depends_on: [oracle-ai]

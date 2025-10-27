@@ -1,0 +1,1 @@
+import React from 'react'; export default function Login({ onConnect }) { const handleConnect = () => { onConnect({ id: '0xUserA' }); }; return <div className="login-container"><h1>FDCN</h1><p>The OS for a Conscious Civilization</p><button onClick={handleConnect}>Connect Identity</button></div>; }

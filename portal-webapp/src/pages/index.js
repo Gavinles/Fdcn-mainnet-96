@@ -1,0 +1,1 @@
+import React,{useState}from'react';import Login from'../components/Login';import Dashboard from'../components/Dashboard';export default function Home(){const[account,setAccount]=useState(null);if(!account){return<Login onConnect={setAccount}/>;}return<Dashboard account={account} setAccount={setAccount}/>;}
