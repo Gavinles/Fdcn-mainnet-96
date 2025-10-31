@@ -37,8 +37,15 @@ def setup_state_update_handler():
             # State updates are sent to specific rooms (account-specific)
             # We cache all received updates - the state-ledger emits to specific rooms
             # so we only receive updates for accounts we've joined
-            # Note: This is a simplified implementation. In production, the data should
-            # include an accountId field to properly route the update.
+            # 
+            # LIMITATION: The current state-ledger implementation does not include 
+            # an accountId field in the state_update event data, making it impossible
+            # to reliably map updates to specific accounts in the cache. To fully
+            # support real-time caching, state-ledger would need to be modified to
+            # include the accountId in emitted state_update events.
+            # 
+            # For now, this DLE service provides fast default responses and relies
+            # on the polling interval in the dashboard to eventually get correct data.
             pass
         
         state_update_handler_registered = True
