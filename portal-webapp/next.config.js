@@ -1,1 +1,1 @@
-module.exports={reactStrictMode:true,async rewrites(){return[{source:'/api/oracle/:path*',destination:'http://oracle-ai:5001/:path*'},{source:'/api/ledger/:path*',destination:'http://state-ledger:5002/:path*'}]}}
+module.exports={reactStrictMode:true,async rewrites(){return[{source:'/api/oracle/:path*',destination:'http://oracle-ai:5001/:path*'},{source:'/api/ledger/:path*',destination:'http://dle-ms:5003/:path*'}]}}

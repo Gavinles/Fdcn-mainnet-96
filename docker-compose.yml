@@ -2,6 +2,10 @@ version: '3.8'
 services:
   state-ledger:
     build: ./services/state-ledger
+  dle-ms:
+    build: ./services/dle-ms
+    ports: ["5003:5003"]
+    depends_on: [state-ledger]
   oracle-ai:
     build: ./services/oracle-ai
     ports: ["5001:5001"]
@@ -11,4 +15,4 @@ services:
   portal:
     build: ./portal-webapp
     ports: ["3000:3000"]
-    depends_on: [oracle-ai]
+    depends_on: [oracle-ai, dle-ms]
