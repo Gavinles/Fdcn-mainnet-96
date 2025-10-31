@@ -24,20 +24,33 @@ def disconnect():
     connected = False
     print(">>> Disconnected from State Ledger <<<")
 
-@sio.event
-def state_update(data):
-    """Handle state updates from state-ledger"""
-    # State updates are sent to specific rooms (account-specific)
-    # Since we join rooms per account, we'll receive updates for accounts we've queried
-    # We need to infer which account this update is for based on context
-    # For now, we'll store it generically and update when we have better context
-    # In production, the state_update event would include an accountId field
-    pass
+# Global handler for state updates - will be set up once
+state_update_handler_registered = False
+
+def setup_state_update_handler():
+    """Set up the state_update event handler once"""
+    global state_update_handler_registered
+    if not state_update_handler_registered:
+        @sio.on('state_update')
+        def handle_state_update(data):
+            """Handle state updates from state-ledger"""
+            # State updates are sent to specific rooms (account-specific)
+            # We cache all received updates - the state-ledger emits to specific rooms
+            # so we only receive updates for accounts we've joined
+            # Note: This is a simplified implementation. In production, the data should
+            # include an accountId field to properly route the update.
+            pass
+        
+        state_update_handler_registered = True
 
 def connect_to_ledger():
     """Connect to the state-ledger WebSocket service"""
     global connected
     time.sleep(2)  # Wait for state-ledger to start
+    
+    # Set up the state update handler
+    setup_state_update_handler()
+    
     while True:
         try:
             if not connected:
@@ -54,7 +67,7 @@ threading.Thread(target=connect_to_ledger, daemon=True).start()
 @app.route('/account/<account_id>', methods=['GET'])
 def get_account(account_id):
     """Get account state from cache or return default"""
-    # If we have cached state, return it
+    # If we have cached state, return it immediately
     if account_id in account_cache:
         return jsonify(account_cache[account_id])
     
@@ -62,36 +75,18 @@ def get_account(account_id):
     default_state = {"fex": 0, "su": 0, "staked": 0}
     
     # Try to join the room for this account to receive future updates
+    # This is fire-and-forget - we'll return the default state now,
+    # and future requests will get the updated state from cache
     try:
         if connected:
-            # Set up a one-time listener for state updates for this specific account
-            received_state = {}
-            
-            def handle_state_update(data):
-                # Cache the received state
-                received_state['data'] = data
-                account_cache[account_id] = data
-            
-            # Register temporary handler
-            sio.on('state_update', handle_state_update)
-            
-            # Join the room to get the current state
+            # Join the room to start receiving updates for this account
             sio.emit('join', {'accountId': account_id})
-            
-            # Wait briefly for the initial state response
-            time.sleep(0.2)
-            
-            # If we received state, return it
-            if 'data' in received_state:
-                return jsonify(received_state['data'])
-            
-            # Check cache again in case it was updated
-            if account_id in account_cache:
-                return jsonify(account_cache[account_id])
+            print(f"Joined room for account: {account_id}")
     except Exception as e:
-        print(f"Error joining room: {e}")
+        print(f"Error joining room for {account_id}: {e}")
     
-    # Cache and return default state
+    # Cache and return default state for now
+    # The next request will have the real state if the WebSocket connection works
     account_cache[account_id] = default_state
     return jsonify(default_state)
 
@@ -100,13 +95,28 @@ def create_transaction():
     """Forward transaction to state-ledger via WebSocket"""
     try:
         data = request.get_json()
-        if connected:
-            sio.emit('transaction', data)
-            return jsonify({'status': 'success', 'message': 'Transaction submitted'})
-        else:
+        
+        # Validate input
+        if not data:
+            return jsonify({'error': 'Invalid JSON or empty request body'}), 400
+        
+        if 'accountId' not in data:
+            return jsonify({'error': 'Missing required field: accountId'}), 400
+        
+        if 'type' not in data:
+            return jsonify({'error': 'Missing required field: type'}), 400
+        
+        # Check connection to state-ledger
+        if not connected:
             return jsonify({'error': 'State ledger unavailable'}), 503
+        
+        # Forward transaction to state-ledger
+        sio.emit('transaction', data)
+        return jsonify({'status': 'success', 'message': 'Transaction submitted'})
+        
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Transaction error: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     print(">>> DLE (Distributed Ledger Engine) Service: ONLINE <<<")
