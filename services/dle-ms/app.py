@@ -9,7 +9,6 @@ CORS(app)
 
 # In-memory cache of account states synchronized with state-ledger
 account_cache = {}
-account_listeners = {}
 sio = sio_client.Client()
 connected = False
 
@@ -28,9 +27,11 @@ def disconnect():
 @sio.event
 def state_update(data):
     """Handle state updates from state-ledger"""
-    # The state_update is sent to a room (account_id specific)
-    # We need to cache it when we receive it
-    # In the actual implementation, this may need account_id context
+    # State updates are sent to specific rooms (account-specific)
+    # Since we join rooms per account, we'll receive updates for accounts we've queried
+    # We need to infer which account this update is for based on context
+    # For now, we'll store it generically and update when we have better context
+    # In production, the state_update event would include an accountId field
     pass
 
 def connect_to_ledger():
@@ -63,25 +64,28 @@ def get_account(account_id):
     # Try to join the room for this account to receive future updates
     try:
         if connected:
+            # Set up a one-time listener for state updates for this specific account
+            received_state = {}
+            
+            def handle_state_update(data):
+                # Cache the received state
+                received_state['data'] = data
+                account_cache[account_id] = data
+            
+            # Register temporary handler
+            sio.on('state_update', handle_state_update)
+            
+            # Join the room to get the current state
             sio.emit('join', {'accountId': account_id})
             
-            # Set up a listener for state updates if not already set
-            if account_id not in account_listeners:
-                @sio.on('state_update')
-                def handle_state_update(data):
-                    # Cache the state update
-                    # Note: This will receive all state_update events
-                    # In a production system, we'd need better routing
-                    if 'accountId' in data:
-                        account_cache[data['accountId']] = data
-                    else:
-                        # If no accountId in data, cache for the account we just joined
-                        account_cache[account_id] = data
-                
-                account_listeners[account_id] = True
+            # Wait briefly for the initial state response
+            time.sleep(0.2)
             
-            # Wait a moment for initial state
-            time.sleep(0.1)
+            # If we received state, return it
+            if 'data' in received_state:
+                return jsonify(received_state['data'])
+            
+            # Check cache again in case it was updated
             if account_id in account_cache:
                 return jsonify(account_cache[account_id])
     except Exception as e:
